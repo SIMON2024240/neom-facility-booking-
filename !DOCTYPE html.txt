@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEOM Residential Community - Facility Booking System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .qr-code {
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="white"/><g fill="black"><rect x="0" y="0" width="20" height="20"/><rect x="80" y="0" width="20" height="20"/><rect x="0" y="80" width="20" height="20"/><rect x="40" y="40" width="20" height="20"/></g></svg>') center/contain no-repeat;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .facility-card {
+            transition: all 0.3s ease;
+        }
+        .facility-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .status-pending { background-color: #FEF3C7; color: #92400E; }
+        .status-approved { background-color: #D1FAE5; color: #065F46; }
+        .status-rejected { background-color: #FEE2E2; color: #991B1B; }
+        .notification {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .form-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .qr-scanner {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .form-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .form-table td, .form-table th {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        .orange-bg { background-color: #ff8c00; color: white; font-weight: bold; }
+        .section-b-bg { background-color: #f0f0f0; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-lg border-b-4 border-blue-600">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/48ec5c35-fbe8-4362-ae33-57db41fadaea.png" alt="NEOM Residential Community logo with modern geometric design and blue color scheme" class="rounded-full">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">NEOM Residential Community-09 (NRC9)</h1>
+                        <p class="text-sm text-gray-600">Recreational Facilities Reservation System</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="qr-code w-12 h-12 cursor-pointer" onclick="showQRBooking()" title="Quick Booking via QR Scan"></div>
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-gray-900" id="currentUserName">Guest User</p>
+                        <p class="text-xs text-gray-500" id="currentUserRole">Resident</p>
+                    </div>
+                    <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex space-x-8 overflow-x-auto">
+                <button onclick="showSection('dashboard')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </button>
+                <button onclick="showSection('booking')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                    <i class="fas fa-calendar-plus mr-2"></i>New Booking
+                </button>
+                <button onclick="showSection('facilities')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                    <i class="fas fa-building mr-2"></i>Facilities
+                </button>
+                <button onclick="showSection('requests')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                    <i class="fas fa-list mr-2"></i>My Requests
+                </button>
+                <button onclick="showSection('approvals')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap admin-only" style="display:none;">
+                    <i class="fas fa-check-circle mr-2"></i>Approvals
+                </button>
+                <button onclick="showSection('reports')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap admin-only" style="display:none;">
+                    <i class="fas fa-chart-bar mr-2"></i>Reports
+                </button>
+                <button onclick="showSection('admin')" class="nav-btn px-4 py-3 text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap admin-only" style="display:none;">
+                    <i class="fas fa-cogs mr-2"></i>Admin
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Notifications -->
+    <div id="notifications" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold text-center mb-6">NEOM NRC9 Facility Booking System</h2>
+            
+            <!-- Quick Login Buttons - Main Login Options -->
+            <div class="space-y-3 mb-6">
+                <button onclick="loginAsAdmin()" class="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
+                    <i class="fas fa-user-shield mr-2"></i>Login as Admin (Simon Babu)
+                </button>
+                <button onclick="loginAsManager()" class="w-full bg-yellow-600 text-white py-3 px-4 rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium">
+                    <i class="fas fa-user-cog mr-2"></i>Login as Soft Service Manager (Vinod Kumar)
+                </button>
+                <button onclick="loginAsHelpdesk()" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <i class="fas fa-headset mr-2"></i>Login as Help Desk (NRC9 Housing)
+                </button>
+                <button onclick="directToBooking()" class="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                    <i class="fas fa-qrcode mr-2"></i>Resident Quick Booking (Skip Login)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-calendar-check text-3xl text-blue-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-medium text-gray-900">Total Bookings</h3>
+                            <p class="text-3xl font-bold text-gray-900" id="totalBookings">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-clock text-3xl text-yellow-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-medium text-gray-900">Pending Approvals</h3>
+                            <p class="text-3xl font-bold text-gray-900" id="pendingApprovals">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-building text-3xl text-green-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-medium text-gray-900">Available Facilities</h3>
+                            <p class="text-3xl font-bold text-gray-900" id="availableFacilities">8</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-qrcode text-3xl text-purple-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-medium text-gray-900">QR Bookings</h3>
+                            <p class="text-3xl font-bold text-gray-900" id="qrBookings">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Bookings -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Recent Bookings</h3>
+                </div>
+                <div class="p-6">
+                    <div id="recentBookings" class="space-y-4">
+                        <p class="text-gray-500 text-center py-8">No recent bookings</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Section -->
+        <div id="booking" class="section hidden">
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="form-section px-6 py-4 text-white">
+                    <h2 class="text-2xl font-bold text-center">NEOM Residential Community-09 (NRC9)</h2>
+                    <p class="text-center mt-2 opacity-90 text-lg">Recreational Facilities Reservation Request Form</p>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Form as Table -->
+                    <table class="form-table">
+                        <!-- Section A Header -->
+                        <tr>
+                            <td colspan="6" class="orange-bg text-center text-lg">Section A: Requester Information</td>
+                        </tr>
+                        
+                        <!-- Row 1 -->
+                        <tr>
+                            <td class="orange-bg">Name of Requester:</td>
+                            <td><input type="text" id="requesterName" required class="w-full border-0 p-1"></td>
+                            <td class="orange-bg">Request Initiated Date</td>
+                            <td><input type="date" id="requestDate" required class="w-full border-0 p-1"></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <!-- Row 2 -->
+                        <tr>
+                            <td class="orange-bg">Company Name:</td>
+                            <td><input type="text" id="companyName" value="MAG" class="w-full border-0 p-1"></td>
+                            <td class="orange-bg">Designation</td>
+                            <td><input type="text" id="designation" class="w-full border-0 p-1"></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <!-- Row 3 -->
+                        <tr>
+                            <td class="orange-bg">Mobile number:</td>
+                            <td><input type="tel" id="mobileNumber" required class="w-full border-0 p-1"></td>
+                            <td class="orange-bg">Email:</td>
+                            <td><input type="email" id="email" required class="w-full border-0 p-1"></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <!-- Row 4 -->
+                        <tr>
+                            <td class="orange-bg">Residence of NRC9:</td>
+                            <td>
+                                <label><input type="radio" name="residence" value="yes" checked class="mr-1"> Yes</label>
+                                <label class="ml-3"><input type="radio" name="residence" value="no" class="mr-1"> No</label>
+                            </td>
+                            <td class="orange-bg">Unit No</td>
+                            <td><input type="text" id="unitNo" placeholder="FMB-025" class="w-full border-0 p-1"></td>
+                            <td class="orange-bg">Unit Location</td>
+                            <td><input type="text" id="unitLocation" placeholder="FMB-Blk2-Bld1" class="w-full border-0 p-1"></td>
+                        </tr>
+                        
+                        <!-- Venue Row -->
+                        <tr>
+                            <td class="orange-bg">Venue Requested:</td>
+                            <td colspan="5">
+                                <select id="venueRequested" required class="w-full border-0 p-1">
+                                    <option value="">Select Venue</option>
+                                    <option value="Multipurpose Hall">Multipurpose Hall</option>
+                                    <option value="Conference Room A">Conference Room A</option>
+                                    <option value="Conference Room B">Conference Room B</option>
+                                    <option value="Swimming Pool">Swimming Pool</option>
+                                    <option value="Gym">Gym</option>
+                                    <option value="Tennis Court">Tennis Court</option>
+                                    <option value="Basketball Court">Basketball Court</option>
+                                    <option value="Children's Play Area">Children's Play Area</option>
+                                </select>
+                            </td>
+                        </tr>
+                        
+                        <!-- Event Row -->
+                        <tr>
+                            <td class="orange-bg">Event:</td>
+                            <td colspan="5"><input type="text" id="event" placeholder="Electrical Safety Awareness (LOTO) Training" required class="w-full border-0 p-1"></td>
+                        </tr>
+                        
+                        <!-- Event Schedule Header -->
+                        <tr>
+                            <td class="orange-bg">(Event Schedule) Start Date:</td>
+                            <td class="orange-bg">Event End Date</td>
+                            <td class="orange-bg">Event start Time</td>
+                            <td class="orange-bg">Event End Time</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <!-- Event Schedule Data -->
+                        <tr>
+                            <td><input type="date" id="startDate" required class="w-full border-0 p-1"></td>
+                            <td><input type="date" id="endDate" required class="w-full border-0 p-1"></td>
+                            <td><input type="time" id="startTime" required class="w-full border-0 p-1"></td>
+                            <td><input type="time" id="endTime" required class="w-full border-0 p-1"></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <!-- Number of Guests -->
+                        <tr>
+                            <td class="orange-bg">No. of Guests:</td>
+                            <td><input type="number" id="noOfGuests" class="w-full border-0 p-1"></td>
+                            <td colspan="4"></td>
+                        </tr>
+                        
+                        <!-- A/V System -->
+                        <tr>
+                            <td class="orange-bg">A/V System:</td>
+                            <td>
+                                <label><input type="radio" name="avSystem" value="yes" class="mr-1"> Yes</label>
+                                <label class="ml-3"><input type="radio" name="avSystem" value="no" class="mr-1"> No</label>
+                            </td>
+                            <td colspan="4"><input type="text" id="avDetails" placeholder="(if yes provide details/RFQ)" class="w-full border-0 p-1"></td>
+                        </tr>
+                        
+                        <!-- F & B Services -->
+                        <tr>
+                            <td class="orange-bg">F & B Services</td>
+                            <td>
+                                <label><input type="radio" name="fbServices" value="yes" class="mr-1"> Yes</label>
+                                <label class="ml-3"><input type="radio" name="fbServices" value="no" class="mr-1"> No</label>
+                            </td>
+                            <td colspan="4"><input type="text" id="fbDetails" placeholder="(if yes provide details/RFQ)" class="w-full border-0 p-1"></td>
+                        </tr>
+                        
+                        <!-- Chargeable -->
+                        <tr>
+                            <td class="orange-bg">Chargeable:</td>
+                            <td>
+                                <label><input type="radio" name="chargeable" value="yes" class="mr-1"> Yes</label>
+                                <label class="ml-3"><input type="radio" name="chargeable" value="no" class="mr-1"> No</label>
+                            </td>
+                            <td><strong>Amount: ..................... SAR</strong></td>
+                            <td colspan="3">
+                                <input type="text" id="amount" placeholder="Amount in SAR" class="w-full border-0 p-1">
+                            </td>
+                        </tr>
+                        
+                        <!-- Invoice to -->
+                        <tr>
+                            <td class="orange-bg">Invoice to:</td>
+                            <td colspan="5"><input type="text" id="invoiceTo" class="w-full border-0 p-1"></td>
+                        </tr>
+                        
+                        <!-- Remarks -->
+                        <tr>
+                            <td class="orange-bg">Remarks:</td>
+                            <td colspan="5"><textarea id="remarks" rows="2" class="w-full border-0 p-1"></textarea></td>
+                        </tr>
+                        
+                        <!-- Submission Note -->
+                        <tr>
+                            <td colspan="6" class="text-center text-sm p-2">
+                                <strong>Please submit the duly filled request form to</strong> @
+                                <span class="text-blue-600">nrc9.nz.housing@mag-sa.com</span>;
+                                <span class="text-blue-600">nrc9.nz.helpdesk@mag-sa.com</span>
+                            </td>
+                        </tr>
+                        
+                        <!-- Section B Header -->
+                        <tr>
+                            <td colspan="6" class="section-b-bg text-center font-bold">Section B: Recreational Department use only</td>
+                        </tr>
+                        
+                        <!-- Section B Content -->
+                        <tr>
+                            <td class="orange-bg">Request handled by:</td>
+                            <td id="handledByDisplay">-</td>
+                            <td class="orange-bg">Signature:</td>
+                            <td id="handledDateDisplay">-</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="orange-bg">Approved (☐ Yes by: ☐ No)</td>
+                            <td id="approvalDisplay">-</td>
+                            <td class="orange-bg">Signature:</td>
+                            <td id="approvalDateDisplay">-</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="orange-bg">Remarks <span class="text-xs">(Reason if not approved and any additional comments as needed)</span></td>
+                            <td colspan="5" id="adminRemarksDisplay">-</td>
+                        </tr>
+                    </table>
+
+                    <div class="flex justify-center space-x-4 mt-6">
+                        <button type="button" onclick="submitBooking()" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            <i class="fas fa-paper-plane mr-2"></i>Submit Request
+                        </button>
+                        <button type="button" onclick="resetForm()" class="bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium">
+                            <i class="fas fa-undo mr-2"></i>Reset Form
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Facilities Section -->
+        <div id="facilities" class="section hidden">
+            <div class="mb-6 flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-900">Available Recreational Facilities</h2>
+                <button onclick="addFacility()" class="admin-only bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" style="display:none;">
+                    <i class="fas fa-plus mr-2"></i>Add Facility
+                </button>
+            </div>
+            <div id="facilitiesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+
+        <!-- Requests Section -->
+        <div id="requests" class="section hidden">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">My Booking Requests</h2>
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Facility</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requestsTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No booking requests found</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approvals Section -->
+        <div id="approvals" class="section hidden">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Pending Approvals - Section B: Recreational Department</h2>
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requester</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Facility</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Handled By</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvalsTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No pending approvals</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Section -->
+        <div id="reports" class="section hidden">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Reports & Analytics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Booking Reports</h3>
+                    <div class="space-y-3">
+                        <button onclick="generateReport('bookings', 'excel')" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                            <i class="fas fa-file-excel mr-2"></i>Export to Excel
+                        </button>
+                        <button onclick="generateReport('bookings', 'pdf')" class="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i>Export to PDF
+                        </button>
+                        <button onclick="generateReport('bookings', 'csv')" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-file-csv mr-2"></i>Export to CSV
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Facility Usage</h3>
+                    <div class="space-y-3">
+                        <button onclick="generateReport('facilities', 'excel')" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                            <i class="fas fa-file-excel mr-2"></i>Export to Excel
+                        </button>
+                        <button onclick="generateReport('facilities', 'pdf')" class="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i>Export to PDF
+                        </button>
+                        <button onclick="generateReport('facilities', 'csv')" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-file-csv mr-2"></i>Export to CSV
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">User Activity</h3>
+                    <div class="space-y-3">
+                        <button onclick="generateReport('users', 'excel')" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                            <i class="fas fa-file-excel mr-2"></i>Export to Excel
+                        </button>
+                        <button onclick="generateReport('users', 'pdf')" class="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i>Export to PDF
+                        </button>
+                        <button onclick="generateReport('users', 'csv')" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-file-csv mr-2"></i>Export to CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Section -->
+        <div id="admin" class="section hidden">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">System Administration</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- User Management -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Staff Management</h3>
+                    <div class="space-y-4">
+                        <button onclick="showUserForm()" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-user-plus mr-2"></i>Add New Staff Member
+                        </button>
+                        <div class="border rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Facility Management -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Facility Management</h3>
+                    <div class="space-y-4">
+                        <button onclick="showFacilityForm()" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                            <i class="fas fa-building mr-2"></i>Add New Facility
+                        </button>
+                        <div class="border rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Facility</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminFacilitiesTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- QR Booking Modal -->
+    <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-8 max-w-lg w-full mx-4">
+            <h2 class="text-2xl font-bold text-center mb-6">Resident Quick Booking</h2>
+            <div class="text-center">
+                <div class="bg-green-100 rounded-lg p-6 mb-4">
+                    <i class="fas fa-check-circle text-4xl text-green-600 mb-3"></i>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">QR Code Scanned Successfully!</h3>
+                    <p class="text-sm text-gray-600">You can now proceed to fill out the booking form without logging in.</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        As a resident, you can book facilities directly without staff login credentials.
+                    </p>
+                </div>
+                <button onclick="proceedToBooking()" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium">
+                    <i class="fas fa-calendar-plus mr-2"></i>Proceed to Booking Form
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        var currentUser = null;
+        var bookings = [];
+        var qrBookingCount = 0;
+        var facilities = [
+            { id: 1, name: 'Multipurpose Hall', capacity: 200, image: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/29f35cdf-aa9b-423a-b6f1-fddb230a093c.png', description: 'Large hall suitable for events, training sessions and meetings with full A/V equipment' },
+            { id: 2, name: 'Conference Room A', capacity: 20, image: 'https://placehold.co/400x250', description: 'Professional meeting room with A/V equipment and video conferencing' },
+            { id: 3, name: 'Conference Room B', capacity: 15, image: 'https://placehold.co/400x250', description: 'Intimate meeting space for small groups and presentations' },
+            { id: 4, name: 'Swimming Pool', capacity: 50, image: 'https://placehold.co/400x250', description: 'Olympic-size swimming pool with changing rooms and lifeguard services' },
+            { id: 5, name: 'Gym', capacity: 30, image: 'https://placehold.co/400x250', description: 'Fully equipped fitness center with modern exercise equipment' },
+            { id: 6, name: 'Tennis Court', capacity: 4, image: 'https://placehold.co/400x250', description: 'Professional tennis court with lighting for evening matches' },
+            { id: 7, name: 'Basketball Court', capacity: 10, image: 'https://placehold.co/400x250', description: 'Indoor basketball court with professional flooring and equipment' },
+            { id: 8, name: "Children's Play Area", capacity: 25, image: 'https://placehold.co/400x250', description: 'Safe and fun playground for children with supervised activities' }
+        ];
+        var users = [
+            { id: 1, name: 'Simon Babu', email: 's.babu@mag-sa.com', password: 'admin123', role: 'admin' },
+            { id: 2, name: 'Vinod Kumar Athiyodan', email: 'v.athiyodan@mag-sa.com', password: 'manager123', role: 'manager' },
+            { id: 3, name: 'Help Desk NRC9', email: 'nrc9.nz.housing@mag-sa.com', password: 'help123', role: 'helpdesk' }
+        ];
+
+        // Direct login functions for each user type
+        function loginAsAdmin() {
+            console.log('Login as Admin clicked');
+            performLogin(users[0]);
+        }
+
+        function loginAsManager() {
+            console.log('Login as Manager clicked');
+            performLogin(users[1]);
+        }
+
+        function loginAsHelpdesk() {
+            console.log('Login as Helpdesk clicked');
+            performLogin(users[2]);
+        }
+
+        // Direct to booking for residents
+        function directToBooking() {
+            console.log('Direct to booking clicked');
+            document.getElementById('loginModal').style.display = 'none';
+            showSection('booking');
+            showNotification('Welcome! You can now fill out the booking form as a resident.', 'success');
+            
+            // Pre-fill resident information
+            document.getElementById('companyName').value = 'Resident';
+            document.getElementById('designation').value = 'NRC9 Resident';
+            qrBookingCount++;
+            updateDashboard();
+        }
+
+        // Perform actual login
+        function performLogin(user) {
+            console.log('Performing login for:', user);
+            currentUser = user;
+            document.getElementById('currentUserName').textContent = user.name;
+            document.getElementById('currentUserRole').textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+            document.getElementById('loginModal').style.display = 'none';
+            
+            // Show/hide admin features based on role
+            var adminElements = document.querySelectorAll('.admin-only');
+            for (var i = 0; i < adminElements.length; i++) {
+                if (user.role === 'admin' || user.role === 'manager') {
+                    adminElements[i].style.display = 'block';
+                } else {
+                    adminElements[i].style.display = 'none';
+                }
+            }
+            
+            showNotification('Welcome back, ' + user.name + '!', 'success');
+            updateDashboard();
+            renderRequests();
+            renderApprovals();
+            renderAdminTables();
+        }
+
+        // Logout functionality
+        function logout() {
+            currentUser = null;
+            document.getElementById('currentUserName').textContent = 'Guest User';
+            document.getElementById('currentUserRole').textContent = 'Resident';
+            document.getElementById('loginModal').style.display = 'flex';
+            
+            // Hide admin features
+            var adminElements = document.querySelectorAll('.admin-only');
+            for (var i = 0; i < adminElements.length; i++) {
+                adminElements[i].style.display = 'none';
+            }
+            
+            showSection('dashboard');
+            showNotification('Logged out successfully', 'info');
+        }
+
+        // Section navigation
+        function showSection(section) {
+            // Hide all sections
+            var sections = document.querySelectorAll('.section');
+            for (var i = 0; i < sections.length; i++) {
+                sections[i].classList.add('hidden');
+            }
+            
+            // Show selected section
+            document.getElementById(section).classList.remove('hidden');
+        }
+
+        // Notification system
+        function showNotification(message, type) {
+            type = type || 'info';
+            var notification = document.createElement('div');
+            var bgColor = 'bg-blue-500';
+            if (type === 'success') bgColor = 'bg-green-500';
+            if (type === 'error') bgColor = 'bg-red-500';
+            if (type === 'warning') bgColor = 'bg-yellow-500';
+            
+            notification.className = 'notification p-4 rounded-lg shadow-lg text-white ' + bgColor;
+            notification.innerHTML = '<div class="flex items-center justify-between"><span>' + message + '</span><button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200"><i class="fas fa-times"></i></button></div>';
+            
+            document.getElementById('notifications').appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(function() {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+
+        // QR Code functionality - Updated to work properly
+        function showQRBooking() {
+            document.getElementById('qrModal').classList.remove('hidden');
+        }
+
+        function proceedToBooking() {
+            qrBookingCount++;
+            document.getElementById('qrModal').classList.add('hidden');
+            showSection('booking');
+            showNotification('QR scan successful! Please fill out the booking form.', 'success');
+            
+            // Pre-fill resident information
+            document.getElementById('companyName').value = 'Resident';
+            document.getElementById('designation').value = 'NRC9 Resident';
+            
+            updateDashboard();
+        }
+
+        // Booking submission
+        function submitBooking() {
+            // Validate required fields
+            var requiredFields = ['requesterName', 'requestDate', 'mobileNumber', 'email', 'venueRequested', 'event', 'startDate', 'endDate', 'startTime', 'endTime'];
+            
+            for (var i = 0; i < requiredFields.length; i++) {
+                var field = document.getElementById(requiredFields[i]);
+                if (!field.value.trim()) {
+                    showNotification('Please fill in all required fields: ' + requiredFields[i], 'error');
+                    field.focus();
+                    return;
+                }
+            }
+            
+            var booking = {
+                id: Date.now(),
+                requesterId: currentUser ? currentUser.id : 'QR_USER',
+                requesterName: document.getElementById('requesterName').value,
+                requestDate: document.getElementById('requestDate').value,
+                companyName: document.getElementById('companyName').value,
+                designation: document.getElementById('designation').value,
+                mobileNumber: document.getElementById('mobileNumber').value,
+                email: document.getElementById('email').value,
+                unitNo: document.getElementById('unitNo').value,
+                unitLocation: document.getElementById('unitLocation').value,
+                residence: document.querySelector('input[name="residence"]:checked') ? document.querySelector('input[name="residence"]:checked').value : '',
+                venueRequested: document.getElementById('venueRequested').value,
+                event: document.getElementById('event').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                startTime: document.getElementById('startTime').value,
+                endTime: document.getElementById('endTime').value,
+                noOfGuests: document.getElementById('noOfGuests').value,
+                avSystem: document.querySelector('input[name="avSystem"]:checked') ? document.querySelector('input[name="avSystem"]:checked').value : '',
+                avDetails: document.getElementById('avDetails').value,
+                fbServices: document.querySelector('input[name="fbServices"]:checked') ? document.querySelector('input[name="fbServices"]:checked').value : '',
+                fbDetails: document.getElementById('fbDetails').value,
+                chargeable: document.querySelector('input[name="chargeable"]:checked') ? document.querySelector('input[name="chargeable"]:checked').value : '',
+                amount: document.getElementById('amount').value,
+                invoiceTo: document.getElementById('invoiceTo').value,
+                remarks: document.getElementById('remarks').value,
+                status: 'pending',
+                submittedAt: new Date().toISOString(),
+                handledBy: null,
+                approvedBy: null,
+                source: currentUser ? 'staff' : 'qr'
+            };
+            
+            bookings.push(booking);
+            
+            showNotification('Booking request #' + booking.id + ' submitted successfully! Email notifications sent to Help Desk and Soft Service Manager.', 'success');
+            resetForm();
+            updateDashboard();
+            renderRequests();
+            renderApprovals();
+        }
+
+        // Reset form
+        function resetForm() {
+            // Reset all form fields
+            document.getElementById('requesterName').value = '';
+            document.getElementById('requestDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('companyName').value = 'MAG';
+            document.getElementById('designation').value = '';
+            document.getElementById('mobileNumber').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('unitNo').value = '';
+            document.getElementById('unitLocation').value = '';
+            document.getElementById('venueRequested').value = '';
+            document.getElementById('event').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            document.getElementById('noOfGuests').value = '';
+            document.getElementById('avDetails').value = '';
+            document.getElementById('fbDetails').value = '';
+            document.getElementById('amount').value = '';
+            document.getElementById('invoiceTo').value = '';
+            document.getElementById('remarks').value = '';
+            
+            // Reset radio buttons
+            document.querySelector('input[name="residence"][value="yes"]').checked = true;
+            
+            // Reset Section B display
+            document.getElementById('handledByDisplay').textContent = '-';
+            document.getElementById('handledDateDisplay').textContent = '-';
+            document.getElementById('approvalDisplay').textContent = '-';
+            document.getElementById('approvalDateDisplay').textContent = '-';
+            document.getElementById('adminRemarksDisplay').textContent = '-';
+        }
+
+        // Update dashboard
+        function updateDashboard() {
+            document.getElementById('totalBookings').textContent = bookings.length;
+            
+            var pendingCount = 0;
+            for (var i = 0; i < bookings.length; i++) {
+                if (bookings[i].status === 'pending') {
+                    pendingCount++;
+                }
+            }
+            document.getElementById('pendingApprovals').textContent = pendingCount;
+            document.getElementById('availableFacilities').textContent = facilities.length;
+            document.getElementById('qrBookings').textContent = qrBookingCount;
+            
+            renderRecentBookings();
+        }
+
+        // Render recent bookings
+        function renderRecentBookings() {
+            var container = document.getElementById('recentBookings');
+            var recentBookings = bookings.slice(-5).reverse();
+            
+            if (recentBookings.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No recent bookings</p>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < recentBookings.length; i++) {
+                var booking = recentBookings[i];
+                html += '<div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">';
+                html += '<div>';
+                html += '<h4 class="font-medium text-gray-900">' + booking.event + '</h4>';
+                html += '<p class="text-sm text-gray-600">' + booking.venueRequested + ' - ' + booking.startDate + '</p>';
+                html += '<p class="text-xs text-gray-500">by ' + booking.requesterName + (booking.source === 'qr' ? ' (QR)' : '') + '</p>';
+                html += '</div>';
+                html += '<span class="px-3 py-1 rounded-full text-xs font-medium status-' + booking.status + '">';
+                html += booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+                html += '</span>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // Render facilities
+        function renderFacilities() {
+            var container = document.getElementById('facilitiesList');
+            var html = '';
+            
+            for (var i = 0; i < facilities.length; i++) {
+                var facility = facilities[i];
+                html += '<div class="facility-card bg-white rounded-lg shadow-lg overflow-hidden">';
+                html += '<img src="' + facility.image + '" alt="' + facility.description + '" class="w-full h-48 object-cover">';
+                html += '<div class="p-6">';
+                html += '<h3 class="text-xl font-bold text-gray-900 mb-2">' + facility.name + '</h3>';
+                html += '<p class="text-gray-600 mb-4">' + facility.description + '</p>';
+                html += '<div class="flex items-center justify-between">';
+                html += '<span class="text-sm text-gray-500"><i class="fas fa-users mr-1"></i>Capacity: ' + facility.capacity + '</span>';
+                html += '<button onclick="bookFacility(' + facility.id + ')" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">Book Now</button>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // Book facility
+        function bookFacility(facilityId) {
+            var facility = null;
+            for (var i = 0; i < facilities.length; i++) {
+                if (facilities[i].id === facilityId) {
+                    facility = facilities[i];
+                    break;
+                }
+            }
+            
+            if (facility) {
+                showSection('booking');
+                document.getElementById('venueRequested').value = facility.name;
+                showNotification(facility.name + ' selected for booking', 'info');
+            }
+        }
+
+        // Render requests
+        function renderRequests() {
+            var container = document.getElementById('requestsTableBody');
+            var userBookings = [];
+            
+            if (currentUser) {
+                for (var i = 0; i < bookings.length; i++) {
+                    if (bookings[i].requesterId === currentUser.id) {
+                        userBookings.push(bookings[i]);
+                    }
+                }
+            }
+            
+            if (userBookings.length === 0) {
+                container.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No booking requests found</td></tr>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < userBookings.length; i++) {
+                var booking = userBookings[i];
+                html += '<tr>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#' + booking.id + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.venueRequested + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.event + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.startDate + ' ' + booking.startTime + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 rounded-full text-xs font-medium status-' + booking.status + '">' + booking.status.charAt(0).toUpperCase() + booking.status.slice(1) + '</span></td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">';
+                html += '<button onclick="viewBooking(' + booking.id + ')" class="text-blue-600 hover:text-blue-900">View</button>';
+                if (booking.status === 'pending') {
+                    html += '<button onclick="cancelBooking(' + booking.id + ')" class="text-red-600 hover:text-red-900">Cancel</button>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            }
+            container.innerHTML = html;
+        }
+
+        // Render approvals
+        function renderApprovals() {
+            var container = document.getElementById('approvalsTableBody');
+            var pendingBookings = [];
+            
+            for (var i = 0; i < bookings.length; i++) {
+                if (bookings[i].status === 'pending') {
+                    pendingBookings.push(bookings[i]);
+                }
+            }
+            
+            if (pendingBookings.length === 0) {
+                container.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No pending approvals</td></tr>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < pendingBookings.length; i++) {
+                var booking = pendingBookings[i];
+                html += '<tr>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#' + booking.id + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.requesterName + (booking.source === 'qr' ? ' (QR)' : '') + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.venueRequested + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.event + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + booking.startDate + ' ' + booking.startTime + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">' + (booking.handledBy || 'Unassigned') + '</td>';
+                html += '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-1">';
+                html += '<button onclick="handleRequest(' + booking.id + ')" class="bg-yellow-600 text-white px-2 py-1 rounded text-xs hover:bg-yellow-700">Handle</button>';
+                html += '<button onclick="approveBooking(' + booking.id + ')" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">Approve</button>';
+                html += '<button onclick="rejectBooking(' + booking.id + ')" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">Reject</button>';
+                html += '<button onclick="viewBooking(' + booking.id + ')" class="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700">View</button>';
+                html += '</td>';
+                html += '</tr>';
+            }
+            container.innerHTML = html;
+        }
+
+        // Admin table rendering
+        function renderAdminTables() {
+            if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) return;
+            
+            // Render users table
+            var usersBody = document.getElementById('usersTableBody');
+            if (usersBody) {
+                var html = '';
+                for (var i = 0; i < users.length; i++) {
+                    var user = users[i];
+                    html += '<tr>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">' + user.name + '</td>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">' + user.role + '</td>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">';
+                    html += '<button onclick="editUser(' + user.id + ')" class="text-blue-600 hover:text-blue-900 mr-2">Edit</button>';
+                    html += '<button onclick="deleteUser(' + user.id + ')" class="text-red-600 hover:text-red-900">Delete</button>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+                usersBody.innerHTML = html;
+            }
+            
+            // Render facilities table
+            var facilitiesBody = document.getElementById('adminFacilitiesTableBody');
+            if (facilitiesBody) {
+                var html = '';
+                for (var i = 0; i < facilities.length; i++) {
+                    var facility = facilities[i];
+                    html += '<tr>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">' + facility.name + '</td>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">' + facility.capacity + '</td>';
+                    html += '<td class="px-4 py-2 text-sm text-gray-900">';
+                    html += '<button onclick="editFacility(' + facility.id + ')" class="text-blue-600 hover:text-blue-900 mr-2">Edit</button>';
+                    html += '<button onclick="deleteFacility(' + facility.id + ')" class="text-red-600 hover:text-red-900">Delete</button>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+                facilitiesBody.innerHTML = html;
+            }
+        }
+
+        // Handle request (assign handler)
+        function handleRequest(bookingId) {
+            var booking = null;
+            for (var i = 0; i < bookings.length; i++) {
+                if (bookings[i].id === bookingId) {
+                    booking = bookings[i];
+                    break;
+                }
+            }
+            
+            if (booking && currentUser) {
+                booking.handledBy = currentUser.name;
+                booking.handledAt = new Date().toISOString();
+                showNotification('Request #' + bookingId + ' assigned to ' + currentUser.name, 'info');
+                renderApprovals();
+                updateSectionB(booking);
+            }
+        }
+
+        // Update Section B display
+        function updateSectionB(booking) {
+            if (booking.handledBy) {
+                document.getElementById('handledByDisplay').textContent = booking.handledBy;
+                document.getElementById('handledDateDisplay').textContent = booking.handledAt ? new Date(booking.handledAt).toLocaleDateString() : '-';
+            }
+            
+            if (booking.status === 'approved') {
+                document.getElementById('approvalDisplay').textContent = '☑ Yes by: ' + booking.approvedBy;
+                document.getElementById('approvalDateDisplay').textContent = booking.approvedAt ? new Date(booking.approvedAt).toLocaleDateString() : '-';
+            } else if (booking.status === 'rejected') {
+                document.getElementById('approvalDisplay').textContent = '☑ No';
+                document.getElementById('approvalDateDisplay').textContent = booking.rejectedAt ? new Date(booking.rejectedAt).toLocaleDateString() : '-';
+                document.getElementById('adminRemarksDisplay').textContent = booking.rejectionReason || 'Request rejected';
+            }
+        }
+
+        // Approve booking
+        function approveBooking(bookingId) {
+            var booking = null;
+            for (var i = 0; i < bookings.length; i++) {
+                if (bookings[i].id === bookingId) {
+                    booking = bookings[i];
+                    break;
+                }
+            }
+            
+            if (booking) {
+                booking.status = 'approved';
+                booking.approvedBy = currentUser ? currentUser.name : 'System';
+                booking.approvedAt = new Date().toISOString();
+                if (!booking.handledBy) {
+                    booking.handledBy = currentUser ? currentUser.name : 'System';
+                }
+                showNotification('Booking #' + bookingId + ' approved successfully', 'success');
+                updateDashboard();
+                renderApprovals();
+                renderRequests();
+                updateSectionB(booking);
+            }
+        }
+
+        // Reject booking
+        function rejectBooking(bookingId) {
+            var reason = prompt('Please provide a reason for rejection:');
+            if (reason) {
+                var booking = null;
+                for (var i = 0; i < bookings.length; i++) {
+                    if (bookings[i].id === bookingId) {
+                        booking = bookings[i];
+                        break;
+                    }
+                }
+                
+                if (booking) {
+                    booking.status = 'rejected';
+                    booking.rejectedBy = currentUser ? currentUser.name : 'System';
+                    booking.rejectedAt = new Date().toISOString();
+                    booking.rejectionReason = reason;
+                    if (!booking.handledBy) {
+                        booking.handledBy = currentUser ? currentUser.name : 'System';
+                    }
+                    showNotification('Booking #' + bookingId + ' rejected', 'warning');
+                    updateDashboard();
+                    renderApprovals();
+                    renderRequests();
+                    updateSectionB(booking);
+                }
+            }
+        }
+
+        // View booking details
+        function viewBooking(bookingId) {
+            var booking = null;
+            for (var i = 0; i < bookings.length; i++) {
+                if (bookings[i].id === bookingId) {
+                    booking = bookings[i];
+                    break;
+                }
+            }
+            
+            if (booking) {
+                alert('BOOKING DETAILS\n' +
+                      '================\n' +
+                      'ID: #' + booking.id + '\n' +
+                      'Requester: ' + booking.requesterName + '\n' +
+                      'Company: ' + booking.companyName + '\n' +
+                      'Venue: ' + booking.venueRequested + '\n' +
+                      'Event: ' + booking.event + '\n' +
+                      'Date: ' + booking.startDate + ' to ' + booking.endDate + '\n' +
+                      'Time: ' + booking.startTime + ' - ' + booking.endTime + '\n' +
+                      'Status: ' + booking.status.toUpperCase() + '\n' +
+                      'Handled By: ' + (booking.handledBy || 'Not assigned') + '\n' +
+                      'Source: ' + (booking.source === 'qr' ? 'QR Code' : 'Staff Portal'));
+            }
+        }
+
+        // Cancel booking
+        function cancelBooking(bookingId) {
+            if (confirm('Are you sure you want to cancel this booking?')) {
+                var booking = null;
+                for (var i = 0; i < bookings.length; i++) {
+                    if (bookings[i].id === bookingId) {
+                        booking = bookings[i];
+                        break;
+                    }
+                }
+                
+                if (booking) {
+                    booking.status = 'cancelled';
+                    booking.cancelledAt = new Date().toISOString();
+                    showNotification('Booking #' + bookingId + ' cancelled', 'info');
+                    updateDashboard();
+                    renderRequests();
+                    renderApprovals();
+                }
+            }
+        }
+
+        // Generate reports
+        function generateReport(type, format) {
+            var data = [];
+            var filename = '';
+            
+            if (type === 'bookings') {
+                for (var i = 0; i < bookings.length; i++) {
+                    var b = bookings[i];
+                    data.push({
+                        'Request ID': b.id,
+                        'Requester': b.requesterName,
+                        'Company': b.companyName,
+                        'Facility': b.venueRequested,
+                        'Event': b.event,
+                        'Start Date': b.startDate,
+                        'End Date': b.endDate,
+                        'Status': b.status,
+                        'Source': b.source
+                    });
+                }
+                filename = 'nrc9_booking_report';
+            } else if (type === 'facilities') {
+                for (var i = 0; i < facilities.length; i++) {
+                    var f = facilities[i];
+                    var totalBookings = 0;
+                    for (var j = 0; j < bookings.length; j++) {
+                        if (bookings[j].venueRequested === f.name) {
+                            totalBookings++;
+                        }
+                    }
+                    data.push({
+                        'Facility ID': f.id,
+                        'Name': f.name,
+                        'Capacity': f.capacity,
+                        'Description': f.description,
+                        'Total Bookings': totalBookings
+                    });
+                }
+                filename = 'nrc9_facility_report';
+            } else if (type === 'users') {
+                for (var i = 0; i < users.length; i++) {
+                    var u = users[i];
+                    var handledBookings = 0;
+                    for (var j = 0; j < bookings.length; j++) {
+                        if (bookings[j].handledBy === u.name) {
+                            handledBookings++;
+                        }
+                    }
+                    data.push({
+                        'User ID': u.id,
+                        'Name': u.name,
+                        'Email': u.email,
+                        'Role': u.role,
+                        'Bookings Handled': handledBookings
+                    });
+                }
+                filename = 'nrc9_user_report';
+            }
+            
+            if (format === 'excel' && data.length > 0) {
+                var ws = XLSX.utils.json_to_sheet(data);
+                var wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Report');
+                XLSX.writeFile(wb, filename + '_' + new Date().toISOString().split('T')[0] + '.xlsx');
+                showNotification('Excel report generated successfully', 'success');
+            } else if (format === 'csv' && data.length > 0) {
+                var csvContent = 'data:text/csv;charset=utf-8,';
+                if (data.length > 0) {
+                    var headers = Object.keys(data[0]);
+                    csvContent += headers.join(',') + '\n';
+                    for (var i = 0; i < data.length; i++) {
+                        var row = [];
+                        for (var j = 0; j < headers.length; j++) {
+                            row.push('"' + (data[i][headers[j]] || '') + '"');
+                        }
+                        csvContent += row.join(',') + '\n';
+                    }
+                }
+                var encodedUri = encodeURI(csvContent);
+                var link = document.createElement('a');
+                link.setAttribute('href', encodedUri);
+                link.setAttribute('download', filename + '_' + new Date().toISOString().split('T')[0] + '.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showNotification('CSV report generated successfully', 'success');
+            } else if (format === 'pdf' && data.length > 0) {
+                var doc = new jsPDF.jsPDF();
+                doc.setFontSize(20);
+                doc.text('NEOM NRC9 Report', 20, 20);
+                doc.setFontSize(12);
+                doc.text('Generated on: ' + new Date().toLocaleDateString(), 20, 35);
+                
+                var yPosition = 50;
+                if (data.length > 0) {
+                    var headers = Object.keys(data[0]);
+                    doc.setFontSize(8);
+                    for (var i = 0; i < Math.min(headers.length, 6); i++) {
+                        doc.text(headers[i], 20 + (i * 30), yPosition);
+                    }
+                    yPosition += 10;
+                    
+                    for (var i = 0; i < Math.min(data.length, 20); i++) {
+                        if (yPosition > 270) break;
+                        for (var j = 0; j < Math.min(headers.length, 6); j++) {
+                            var text = String(data[i][headers[j]] || '').substring(0, 12);
+                            doc.text(text, 20 + (j * 30), yPosition);
+                        }
+                        yPosition += 8;
+                    }
+                }
+                
+                doc.save(filename + '_' + new Date().toISOString().split('T')[0] + '.pdf');
+                showNotification('PDF report generated successfully', 'success');
+            } else if (data.length === 0) {
+                showNotification('No data to export', 'warning');
+            }
+        }
+
+        // Admin functions
+        function showUserForm() {
+            var name = prompt('Enter staff member name:');
+            var email = prompt('Enter email address:');
+            var password = prompt('Enter password:');
+            var role = prompt('Enter role (admin/manager/helpdesk):');
+            
+            if (name && email && password && role) {
+                var newUser = {
+                    id: Date.now(),
+                    name: name,
+                    email: email,
+                    password: password,
+                    role: role
+                };
+                users.push(newUser);
+                renderAdminTables();
+                showNotification('Staff member added successfully', 'success');
+            }
+        }
+
+        function editUser(userId) {
+            var user = null;
+            for (var i = 0; i < users.length; i++) {
+                if (users[i].id === userId) {
+                    user = users[i];
+                    break;
+                }
+            }
+            
+            if (user) {
+                var name = prompt('Enter staff member name:', user.name);
+                var email = prompt('Enter email address:', user.email);
+                var role = prompt('Enter role:', user.role);
+                
+                if (name && email && role) {
+                    user.name = name;
+                    user.email = email;
+                    user.role = role;
+                    renderAdminTables();
+                    showNotification('Staff member updated successfully', 'success');
+                }
+            }
+        }
+
+        function deleteUser(userId) {
+            if (confirm('Are you sure you want to delete this staff member?')) {
+                for (var i = 0; i < users.length; i++) {
+                    if (users[i].id === userId) {
+                        users.splice(i, 1);
+                        break;
+                    }
+                }
+                renderAdminTables();
+                showNotification('Staff member deleted successfully', 'success');
+            }
+        }
+
+        function showFacilityForm() {
+            var name = prompt('Enter facility name:');
+            var capacity = prompt('Enter facility capacity:');
+            var description = prompt('Enter facility description:');
+            
+            if (name && capacity && description) {
+                var newFacility = {
+                    id: Date.now(),
+                    name: name,
+                    capacity: parseInt(capacity),
+                    description: description,
+                    image: 'https://placehold.co/400x250'
+                };
+                facilities.push(newFacility);
+                renderFacilities();
+                renderAdminTables();
+                showNotification('Facility added successfully', 'success');
+            }
+        }
+
+        function editFacility(facilityId) {
+            var facility = null;
+            for (var i = 0; i < facilities.length; i++) {
+                if (facilities[i].id === facilityId) {
+                    facility = facilities[i];
+                    break;
+                }
+            }
+            
+            if (facility) {
+                var name = prompt('Enter facility name:', facility.name);
+                var capacity = prompt('Enter facility capacity:', facility.capacity);
+                var description = prompt('Enter facility description:', facility.description);
+                
+                if (name && capacity && description) {
+                    facility.name = name;
+                    facility.capacity = parseInt(capacity);
+                    facility.description = description;
+                    renderFacilities();
+                    renderAdminTables();
+                    showNotification('Facility updated successfully', 'success');
+                }
+            }
+        }
+
+        function deleteFacility(facilityId) {
+            if (confirm('Are you sure you want to delete this facility?')) {
+                for (var i = 0; i < facilities.length; i++) {
+                    if (facilities[i].id === facilityId) {
+                        facilities.splice(i, 1);
+                        break;
+                    }
+                }
+                renderFacilities();
+                renderAdminTables();
+                showNotification('Facility deleted successfully', 'success');
+            }
+        }
+
+        // Initialize the app when the page loads
+        window.onload = function() {
+            console.log('Page loaded, initializing app...');
+            showSection('dashboard');
+            updateDashboard();
+            renderFacilities();
+            
+            // Set current date
+            var today = new Date().toISOString().split('T')[0];
+            var requestDateInput = document.getElementById('requestDate');
+            if (requestDateInput) {
+                requestDateInput.value = today;
+            }
+            
+            console.log('App initialized successfully');
+        };
+    </script>
+</body>
+</html>
+
